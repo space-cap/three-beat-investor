@@ -1,0 +1,16 @@
+[project]
+name = "three-beat-investor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.32.5",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.2.2",
+    "pytest-mock>=3.14.0",
+    "python-dotenv>=1.0.1",
+]
