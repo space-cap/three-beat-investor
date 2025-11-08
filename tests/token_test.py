@@ -37,7 +37,8 @@ def run_token_test():
         print("\n토큰 발급 테스트를 시작합니다...")
         
         # 토큰 발급 함수 직접 호출
-        client._get_token()
+        # client._get_token()
+        client._check_token()
 
         # 결과 확인
         if client.access_token:

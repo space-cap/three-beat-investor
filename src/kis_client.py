@@ -27,6 +27,7 @@ class KisClient:
         self.account_number = account_number
         self.hts_user_id = hts_user_id
         self.is_prod = is_prod
+        self.token_file_path = ".token"
         
         # 실서버/모의투자 환경에 따른 URL 설정
         if is_prod:
@@ -38,10 +39,57 @@ class KisClient:
         self.token_expiry = None
         
         print(f"[{'실서버' if is_prod else '모의투자'}] 환경으로 클라이언트를 초기화합니다. Base URL: {self.base_url}")
+        self._load_token_from_file()
+
+    def _load_token_from_file(self):
+        """
+        파일에 저장된 액세스 토큰을 불러옵니다.
+        토큰이 유효하면 self.access_token과 self.token_expiry를 설정합니다.
+        """
+        if not os.path.exists(self.token_file_path):
+            print("저장된 토큰 파일이 없습니다.")
+            return
+
+        try:
+            with open(self.token_file_path, 'r') as f:
+                token_data = json.load(f)
+            
+            expiry_str = token_data.get('token_expiry')
+            if not expiry_str:
+                print("토큰 파일에 만료 정보가 없습니다.")
+                return
+
+            token_expiry = datetime.fromisoformat(expiry_str)
+
+            if datetime.now(UTC) < token_expiry:
+                self.access_token = token_data.get('access_token')
+                self.token_expiry = token_expiry
+                print(f"파일에서 유효한 토큰을 불러왔습니다. 만료 시각(UTC): {self.token_expiry}")
+            else:
+                print("파일의 토큰이 만료되었습니다.")
+
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"오류: 토큰 파일을 읽는 중 문제가 발생했습니다 - {e}")
+
+    def _save_token_to_file(self):
+        """
+        현재 액세스 토큰과 만료 시간을 파일에 저장합니다.
+        """
+        if self.access_token and self.token_expiry:
+            try:
+                with open(self.token_file_path, 'w') as f:
+                    token_data = {
+                        'access_token': self.access_token,
+                        'token_expiry': self.token_expiry.isoformat()
+                    }
+                    json.dump(token_data, f)
+                print(f"토큰을 '{self.token_file_path}' 파일에 저장했습니다.")
+            except IOError as e:
+                print(f"오류: 토큰 파일 저장 실패 - {e}")
 
     def _get_token(self):
         """
-        KIS API 인증 서버로부터 액세스 토큰을 발급받습니다. (Private 메서드)
+        KIS API 인증 서버로부터 액세스 토큰을 발급받고 파일에 저장합니다. (Private 메서드)
         """
         print("액세스 토큰 발급을 시도합니다...")
         url = f"{self.base_url}/oauth2/tokenP"
@@ -65,6 +113,7 @@ class KisClient:
             self.token_expiry = datetime.now(UTC) + timedelta(seconds=expires_in)
             
             print(f"액세스 토큰 발급 성공. 만료 시각(UTC): {self.token_expiry}")
+            self._save_token_to_file()
 
         except requests.exceptions.RequestException as e:
             print(f"오류: 토큰 발급 실패 - {e}")
@@ -139,13 +188,14 @@ class KisClient:
             response.raise_for_status() # HTTP 오류 체크
             
             data = response.json()
+            # print(f"data: {data}")
             
             # 5. API 응답 코드(rt_cd) 확인
             if data['rt_cd'] != '0':
                 raise Exception(f"API 오류: {data['msg1']} (응답 코드: {data['rt_cd']})")
 
             # 6. 결과 파싱 (종목 코드 리스트 반환)
-            stock_list = [item['code'] for item in data.get('output', [])]
+            stock_list = [item['code'] for item in data.get('output2', [])]
             
             print(f"조건 검색 성공. 총 {len(stock_list)}개 종목 발견.")
             return stock_list
